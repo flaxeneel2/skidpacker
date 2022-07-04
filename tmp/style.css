@@ -1,0 +1,8 @@
+body {
+    backdrop-filter: blur(10px); /* was 5 when i took ss */
+    background-image: url('Skidpacker.png');
+    background-size: 100%;
+    background-repeat: no-repeat;
+    background-color: black;
+    filter: blur(4px);
+}
