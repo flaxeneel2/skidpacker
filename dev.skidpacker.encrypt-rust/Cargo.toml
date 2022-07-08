@@ -1,8 +1,14 @@
 [package]
-name = "dev-skidpacker-encrypt-rust"
-version = "0.1.0"
+name = "skidencrypt"
+version = "0.0.1"
 edition = "2021"
+description = "A skidpacker encrypt program made to encrypt jarfiles to allow the skidpacker loader to load them."
+authors = ["flaxeneel2","slowrecall"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+clap = { version = "3.2.8", features = ["derive"] }
+colour = "0.6.0"
+once_cell = "1.13.0"
+zip = "0.6.2"
