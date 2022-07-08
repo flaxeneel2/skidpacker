@@ -1,10 +1,14 @@
+
 use std::fs::File;
+use std::io::{Write};
+
 use std::path::Path;
 use std::process::exit;
 use colour::*;
 use clap::Parser;
 use once_cell::sync::OnceCell;
-use zip::read::ZipFile;
+
+use zip::write::FileOptions;
 use zip::ZipArchive;
 
 #[derive(Parser, Debug)]
@@ -70,47 +74,47 @@ fn main() {
 }
 
 fn encrypt_jar(jar: File) {
-    let mut classes: Vec<ZipFile> = Vec::new();
-    let _output_jar = zip::write::ZipWriter::new(File::create(&args().output_jar).unwrap());
-    get_classes(jar, &mut classes);
+    let mut classes: Vec<String> = Vec::new();
+    let mut output_jar = zip::write::ZipWriter::new(File::create(&args().output_jar).unwrap()); //not in use for now
+    get_classes(jar.try_clone().unwrap(), &mut classes);
+    let mut z_jar = ZipArchive::new(jar).unwrap();
+    for class in classes {
+        let clazz = z_jar.by_name(class.as_str()).unwrap();
+        output_jar.start_file(clazz.name(), FileOptions::default()).unwrap();
+        output_jar.write_all(format!("File name: {}, Size: {}, Compressed Size: {}", clazz.name(), clazz.size(), clazz.compressed_size()).as_bytes()).expect("TODO: panic message");
+        verbose!(format!("File name: {}, Size: {}, Compressed Size: {}", clazz.name(), clazz.size(), clazz.compressed_size()))
+
+    }
+}
+
+fn encrypt_class(data: &[u8]) {
 
 }
 
-fn get_classes(jar: File, class_vec: &mut Vec<ZipFile>) {
-    let data = ZipArchive::new(jar);
-    let mut data = match data {
+fn get_classes(jar: File, class_vec: &mut Vec<String>) {
+    let data = match ZipArchive::new(jar) {
         Ok(f) => f,
         Err(err) => {
             error!(err);
             exit(1)
         }
     };
-    for i in 0..data.len() {
-        let file = match data.by_index(i) {
-            Ok(f) => {f},
-            Err(e) => {
-                error!(e);
-                exit(1)
-            }
-        };
-        read_classes_recursively(file, class_vec)
+    let mut num_accepted = 0;
+    let mut num_rejected = 0;
+    let f_names = data.file_names();
+    for i in f_names {
+        verbose!(format!("Found file: {}", i));
+        if i.ends_with(".class") {
+            class_vec.push(i.to_string());
+            verbose!(format!("Accepted class: {}", i));
+            num_accepted+=1;
+        } else {
+            verbose!(format!("Rejected: {}", i));
+            num_rejected+=1;
+        }
     }
+    log!(format!("Jar read finished! {} Accepted and {} Rejected", num_accepted, num_rejected))
 }
-
-fn read_classes_recursively<'a>(z_file: ZipFile<'a>, class_vec: &mut Vec<ZipFile<'a>>) {
-    
-}
-
-/*fn read_classes_recursively<'a>(z_file: ZipFile<'a>, class_vec: &mut Vec<ZipFile<'a>>) {
-    if z_file.is_dir() {
-        read_classes_recursively(z_file, class_vec)
-    } else if z_file.name().ends_with(".class") {
-        verbose!(format!("Queueing {}", z_file.name()));
-        class_vec.push(z_file);
-    } else {
-        verbose!(format!("Skipping {}", z_file.name()));
-    }
-}*/
 
 /// Get the jarfile to be encrypted
 /// This will error and exit the program if the file does not exist or there was an error reading the file.
