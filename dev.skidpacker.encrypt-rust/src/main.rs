@@ -71,27 +71,37 @@ fn main() {
     log!(format!("loading {}", &args().input_jar));
     let jar = get_jar();
     encrypt_jar(jar);
+    log!(format!("{} has been encrypted! Encrypted jar saved as {}", args().input_jar, args().output_jar))
 }
 
 fn encrypt_jar(jar: File) {
     let mut classes: Vec<String> = Vec::new();
+    let mut other_files: Vec<String> = Vec::new();
     let mut output_jar = zip::write::ZipWriter::new(File::create(&args().output_jar).unwrap()); //not in use for now
-    get_classes(jar.try_clone().unwrap(), &mut classes);
+    separate_classes(jar.try_clone().unwrap(), &mut classes, &mut other_files);
     let mut z_jar = ZipArchive::new(jar).unwrap();
+    log!("Classes and files loaded! Encrypting classes...");
     for class in classes {
         let clazz = z_jar.by_name(class.as_str()).unwrap();
         output_jar.start_file(clazz.name(), FileOptions::default()).unwrap();
         output_jar.write_all(format!("File name: {}, Size: {}, Compressed Size: {}", clazz.name(), clazz.size(), clazz.compressed_size()).as_bytes()).expect("TODO: panic message");
-        verbose!(format!("File name: {}, Size: {}, Compressed Size: {}", clazz.name(), clazz.size(), clazz.compressed_size()))
-
+        verbose!(format!("Added class {}", clazz.name()))
     }
+    log!("Classes encrypted!");
+    for other in other_files {
+        let file = z_jar.by_name(other.as_str()).unwrap();
+        output_jar.start_file(file.name(), FileOptions::default()).unwrap();
+        output_jar.write_all(format!("File name: {}, Size: {}, Compressed Size: {}", file.name(), file.size(), file.compressed_size()).as_bytes()).expect("TODO: panic message");
+        verbose!(format!("Added file {}", file.name()));
+    }
+    log!("Files added!")
 }
 
 fn encrypt_class(data: &[u8]) {
 
 }
 
-fn get_classes(jar: File, class_vec: &mut Vec<String>) {
+fn separate_classes(jar: File, class_vec: &mut Vec<String>, other_vec: &mut Vec<String>) {
     let data = match ZipArchive::new(jar) {
         Ok(f) => f,
         Err(err) => {
@@ -109,9 +119,13 @@ fn get_classes(jar: File, class_vec: &mut Vec<String>) {
             verbose!(format!("Accepted class: {}", i));
             num_accepted+=1;
         } else {
+            other_vec.push(i.to_string());
             verbose!(format!("Rejected: {}", i));
             num_rejected+=1;
         }
+    }
+    if num_accepted==0 {
+        warn!("No classes detected! Please run with `-v` to see the list of accepted and rejected files")
     }
     log!(format!("Jar read finished! {} Accepted and {} Rejected", num_accepted, num_rejected))
 }
