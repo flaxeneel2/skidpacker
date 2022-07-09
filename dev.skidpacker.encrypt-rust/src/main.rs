@@ -1,9 +1,11 @@
+extern crate core;
 
 use std::fs::File;
-use std::io::{Write};
-
+use std::io::{Read, Write};
 use std::path::Path;
 use std::process::exit;
+use aes_gcm::{AeadInPlace, Aes256Gcm, Key, Nonce}; // Or `Aes128Gcm`
+use aes_gcm::aead::{NewAead};
 use colour::*;
 use clap::Parser;
 use once_cell::sync::OnceCell;
@@ -22,7 +24,10 @@ struct Args {
     verbose: bool,
     /// The name of the output jar
     #[clap(short, long, default_value="output.jar")]
-    output_jar: String
+    output_jar: String,
+    /// Report the time taken to complete the task
+    #[clap(short, long)]
+    timings: bool
 }
 
 static ARGS: OnceCell<Args> = OnceCell::new();
@@ -67,38 +72,69 @@ macro_rules! log {
 fn main() {
     let loaded_args = Args::parse(); //parse the args
     ARGS.set(loaded_args).unwrap();
+    let start = std::time::SystemTime::now();
+    if args().timings {
+        log!("Timer started");
+    }
     verbose!("Arguments accepted!");
     log!(format!("loading {}", &args().input_jar));
     let jar = get_jar();
     encrypt_jar(jar);
-    log!(format!("{} has been encrypted! Encrypted jar saved as {}", args().input_jar, args().output_jar))
+    log!(format!("{} has been encrypted! Encrypted jar saved as {}", args().input_jar, args().output_jar));
+    if args().timings {
+        let end = start.elapsed().unwrap();
+        log!(format!("Entire operation finished! Time taken: {}ms", end.as_millis()));
+    }
 }
 
+/// The main entrypoint for the encryption process
+///
+/// # Arguments
+/// * `jar` - The jar to encrypt
 fn encrypt_jar(jar: File) {
     let mut classes: Vec<String> = Vec::new();
     let mut other_files: Vec<String> = Vec::new();
     let mut output_jar = zip::write::ZipWriter::new(File::create(&args().output_jar).unwrap()); //not in use for now
+
     separate_classes(jar.try_clone().unwrap(), &mut classes, &mut other_files);
+
     let mut z_jar = ZipArchive::new(jar).unwrap();
+
     log!("Classes and files loaded! Encrypting classes...");
+
     for class in classes {
-        let clazz = z_jar.by_name(class.as_str()).unwrap();
+        let mut clazz = z_jar.by_name(class.as_str()).unwrap();
+        let mut clazz_bytes: Vec<u8> = Vec::new();
+
+        clazz.read_to_end(&mut clazz_bytes).expect("Unable to read class bytes!");
         output_jar.start_file(clazz.name(), FileOptions::default()).unwrap();
-        output_jar.write_all(format!("File name: {}, Size: {}, Compressed Size: {}", clazz.name(), clazz.size(), clazz.compressed_size()).as_bytes()).expect("TODO: panic message");
-        verbose!(format!("Added class {}", clazz.name()))
+
+        encrypt_class(&mut clazz_bytes);
+
+        output_jar.write_all(clazz_bytes.as_slice()).expect("TODO: panic message");
+        verbose!(format!("Encrypted and added class {}", clazz.name()))
     }
+
     log!("Classes encrypted!");
+
     for other in other_files {
-        let file = z_jar.by_name(other.as_str()).unwrap();
+        let mut file = z_jar.by_name(other.as_str()).unwrap();
+        let mut file_bytes: Vec<u8> = Vec::new();
+
+        file.read_to_end(&mut file_bytes).expect("Unable to read file bytes!");
         output_jar.start_file(file.name(), FileOptions::default()).unwrap();
-        output_jar.write_all(format!("File name: {}, Size: {}, Compressed Size: {}", file.name(), file.size(), file.compressed_size()).as_bytes()).expect("TODO: panic message");
+        output_jar.write_all(file_bytes.as_slice()).expect("Unable to write file to output jar!");
+
         verbose!(format!("Added file {}", file.name()));
     }
     log!("Files added!")
 }
 
-fn encrypt_class(data: &[u8]) {
-
+fn encrypt_class(data: &mut Vec<u8>) {
+    let key = Key::from_slice(b"11111111111111111111111111111111");
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice("111111111111".as_bytes());
+    cipher.encrypt_in_place(nonce, b"", data).expect("Failed to encrypt");
 }
 
 fn separate_classes(jar: File, class_vec: &mut Vec<String>, other_vec: &mut Vec<String>) {
