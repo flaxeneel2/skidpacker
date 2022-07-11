@@ -8,7 +8,7 @@ use std::process::exit;
 
 use std::sync::mpsc::{channel, Sender};
 use std::time::{SystemTime};
-use aes_gcm::{AeadInPlace, Aes256Gcm, Key, Nonce}; // Or `Aes128Gcm`
+use aes_gcm::{AeadInPlace, Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{NewAead};
 use colour::*;
 use clap::Parser;
@@ -108,44 +108,14 @@ fn encrypt_jar(jar: File) {
 
     separate_classes(jar.try_clone().unwrap(), &mut classes, &mut other_files);
     let mut encrypted_classes: HashMap<String, Vec<u8>> = HashMap::new();
-    fire_threads(classes, &mut encrypted_classes); //finishes at ~3000ms from startup
+    fire_threads(classes, &mut encrypted_classes);
     let mut output_jar = ZipWriter::new(BufWriter::new(File::create(&args().output_jar).unwrap()));
     for m in encrypted_classes.iter() {
         let class_name = m.0.to_owned();
         let class_data = m.1.to_owned();
         output_jar.start_file(class_name, FileOptions::default()).unwrap();
         output_jar.write_all(&*class_data).unwrap();
-    }//finishes at ~7800ms
-
-
-    /*log!("Classes and files loaded! Encrypting classes...");
-
-    for class in classes {
-        let mut clazz = z_jar.by_name(class.as_str()).unwrap();
-        let mut clazz_bytes: Vec<u8> = Vec::new();
-
-        clazz.read_to_end(&mut clazz_bytes).expect("Unable to read class bytes!");
-        output_jar.start_file(clazz.name(), FileOptions::default()).unwrap();
-
-        encrypt_class(&mut clazz_bytes);
-
-        output_jar.write_all(clazz_bytes.as_slice()).expect("TODO: panic message");
-        verbose!(format!("Encrypted and added class {}", clazz.name()))
     }
-
-    log!("Classes encrypted!");
-
-    for other in other_files {
-        let mut file = z_jar.by_name(other.as_str()).unwrap();
-        let mut file_bytes: Vec<u8> = Vec::new();
-
-        file.read_to_end(&mut file_bytes).expect("Unable to read file bytes!");
-        output_jar.start_file(file.name(), FileOptions::default()).unwrap();
-        output_jar.write_all(file_bytes.as_slice()).expect("Unable to write file to output jar!");
-
-        verbose!(format!("Added file {}", file.name()));
-    }
-    log!("Files added!")*/
 }
 
 fn fire_threads(i_classes: Vec<String> ,f_hashmap: &mut HashMap<String, Vec<u8>>) {
@@ -168,91 +138,6 @@ fn fire_threads(i_classes: Vec<String> ,f_hashmap: &mut HashMap<String, Vec<u8>>
         f_hashmap.insert(d.0, d.1);
     }
     log!(format!("Encryption Done! Time taken: {}ms", start.elapsed().unwrap().as_millis()))
-    /*for a in rx.iter() {
-        log!("Hi");
-        f_hashmap.insert(a.0, a.1);
-        if f_hashmap.len() == fin_len {
-            break
-        }
-    }*/
-    /*for _ in 0..args().threads {
-        pool.spawn(move|| {
-            let mut z_jar = ZipArchive::new(get_jar()).unwrap();
-            loop {
-                if classes.get_mut().unwrap().len() == 0 {
-                    break
-                }
-                let class_name = classes.get_mut().unwrap().pop().unwrap();
-                let mut class = z_jar.by_name(class_name.as_str()).unwrap();
-                let mut class_bytes: Vec<u8> = Vec::new();
-                class.read_to_end(&mut class_bytes).expect("cant read");
-                encrypt_class(&mut class_bytes);
-                imap.get_mut().unwrap().insert(class_name, class_bytes);
-            }
-        })
-    }*/
-    /*scope(|s| {
-        for _ in 0..args().threads {
-            s.spawn(|_| {
-                let mut z_jar = ZipArchive::new(get_jar()).unwrap();
-                loop {
-                    if classes.get().unwrap().len() == 0 {
-                        break
-                    }
-                    let class_name = classes.get_mut().unwrap().pop().unwrap();
-                    let mut class = z_jar.by_name(class_name.as_str()).unwrap();
-                    let mut class_bytes: Vec<u8> = Vec::new();
-                    class.read_to_end(&mut class_bytes).expect("cant read");
-                    encrypt_class(&mut class_bytes);
-                    f_hashmap.insert(class_name, class_bytes);
-                }
-            });
-        }
-    })*/
-
-
-
-
-    /*let pool = threadpool::ThreadPool::new(8);
-    let (tx, rx): (Sender<HashMap<String, Vec<u8>>>, _) = channel();
-    let mut cl: Arc<Vec<String>> = Arc::new(i_classes);
-    let mut exited = 0;
-    for _ in 0..args().threads {
-        let tx = tx.clone();
-        let mut classes= cl.clone();
-        pool.execute(move|| {
-            let mut z_jar = ZipArchive::new(get_jar()).unwrap();
-            loop {
-                if classes.len() == 0 {
-                    break
-                }
-                let class_name = classes.pop().unwrap();
-                let mut class = z_jar.by_name(class_name.as_str()).unwrap();
-                let mut class_bytes: Vec<u8> = Vec::new();
-                class.read_to_end(&mut class_bytes).expect("cant read");
-                encrypt_class(&mut class_bytes);
-                let mut returner: HashMap<String, Vec<u8>> = HashMap::new();
-                returner.insert(class_name, class_bytes);
-                tx.send(returner).expect("TODO: panic message");
-            }
-            let mut returner: HashMap<String, Vec<u8>> = HashMap::new();
-            returner.insert("Done".to_string(), Vec::new());
-            tx.send(returner).unwrap();
-        })
-    }
-    for i in rx.iter() {
-        for a in i.iter() {
-            if a.0.to_owned().ends_with("Done") {
-                exited+=1;
-                log!(format!("Thread exited! {}", args().threads-exited))
-            } else {
-                f_hashmap.insert(a.0.to_owned(), a.1.to_owned());
-            }
-        }
-        if exited == args().threads {
-            break
-        }
-    }*/
 }
 
 fn encrypt_class(data: &mut Vec<u8>) {
