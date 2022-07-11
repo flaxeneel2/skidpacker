@@ -1,6 +1,6 @@
 [package]
 name = "skidencrypt"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 description = "A skidpacker encrypt program made to encrypt jarfiles to allow the skidpacker loader to load them."
 authors = ["flaxeneel2","slowrecall"]
@@ -13,3 +13,5 @@ colour = "0.6.0"
 once_cell = "1.13.0"
 zip = "0.6.2"
 aes-gcm = "0.9.4"
+threadpool = "1.8.1"
+rayon = "1.5.3"
