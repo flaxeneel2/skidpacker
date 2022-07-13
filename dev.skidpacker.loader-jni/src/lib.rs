@@ -7,7 +7,6 @@ use lazy_static::lazy_static;
 use crate::config::Config;
 use std::sync::Mutex;
 
-// ill try to sort out the basic functions looking at the drm
 lazy_static! {
     pub static ref JNI_PTR: Mutex<usize> = Mutex::new(0);
     pub static ref CONFIG: Mutex<Config> = Mutex::new(Config::default());

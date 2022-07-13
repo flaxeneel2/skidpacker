@@ -105,25 +105,22 @@ fn main() {
 fn encrypt_jar(jar: File) {
     let mut classes: Vec<String> = Vec::new();
     let mut other_files: Vec<String> = Vec::new();
-
     separate_classes(jar.try_clone().unwrap(), &mut classes, &mut other_files);
-    let mut encrypted_classes: HashMap<String, Vec<u8>> = HashMap::new();
-    fire_threads(classes, &mut encrypted_classes);
-    let mut output_jar = ZipWriter::new(BufWriter::new(File::create(&args().output_jar).unwrap()));
-    for m in encrypted_classes.iter() {
-        let class_name = m.0.to_owned();
-        let class_data = m.1.to_owned();
-        output_jar.start_file(class_name, FileOptions::default()).unwrap();
-        output_jar.write_all(&*class_data).unwrap();
-    }
+    mass_encrypt_and_write_to_output_jar(classes, other_files);
 }
 
-fn fire_threads(i_classes: Vec<String> ,f_hashmap: &mut HashMap<String, Vec<u8>>) {
+/// Takes a vector of class names and a vector of resource names. Encrypts the classes and adds them to output jar, while only copying the resources in without encrypting them.
+///
+/// # Arguments
+/// * `i_classes` - The initial classes. A vector of class names to be encrypted.
+/// * `i_other` - The files that need to be left alone. Often just resources
+fn mass_encrypt_and_write_to_output_jar(i_classes: Vec<String>, i_other: Vec<String>) {
     let start = SystemTime::now();
     let classes = i_classes.clone();
     let (tx, rx): (Sender<(String, Vec<u8>)>, _) = channel();
     let mut cs_hm: HashMap<String, Vec<u8>> = HashMap::new();
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
+    let mut output_jar = ZipWriter::new(BufWriter::new(File::create(&args().output_jar).unwrap()));
     for x in classes {
         let mut cb: Vec<u8> = Vec::new();
         z_jar.by_name(x.as_str()).unwrap().read_to_end(&mut cb).unwrap();
@@ -131,20 +128,33 @@ fn fire_threads(i_classes: Vec<String> ,f_hashmap: &mut HashMap<String, Vec<u8>>
     }
     cs_hm.into_par_iter().for_each_with(tx, |tx, a| {
         let mut b = a.1;
-        encrypt_class(&mut b);
-        tx.send((a.0, b)).unwrap();
+        encrypt_class(&mut b, &a.0);
+        tx.send((a.0, b)).expect("TODO: panic message");
     });
     for d in rx.iter() {
-        f_hashmap.insert(d.0, d.1);
+        output_jar.start_file(d.0, FileOptions::default()).expect("TODO: panic message");
+        output_jar.write_all(&*d.1).expect("TODO: panic message");
     }
-    log!(format!("Encryption Done! Time taken: {}ms", start.elapsed().unwrap().as_millis()))
+    i_other.iter().for_each(|a| {
+        output_jar.raw_copy_file(z_jar.by_name(a.as_str()).unwrap()).unwrap();
+    });
+    if args().timings {
+        log!(format!("Encryption done and encrypted jar generated! Time taken: {}ms", start.elapsed().unwrap().as_millis()))
+    } else {
+        log!("Encryption done and encrypted jar generated!")
+    }
 }
 
-fn encrypt_class(data: &mut Vec<u8>) {
+fn encrypt_class(data: &mut Vec<u8>, name: &String) {
     let key = Key::from_slice(b"11111111111111111111111111111111");
     let cipher = Aes256Gcm::new(key);
     let nonce = Nonce::from_slice("111111111111".as_bytes());
-    cipher.encrypt_in_place(nonce, b"", data).expect("Failed to encrypt");
+    let mut bytes = data.clone();
+    cipher.encrypt_in_place(nonce, b"", &mut bytes).expect("Failed to encrypt");
+    data.clear();
+    data.extend_from_slice(name.len().to_be_bytes().as_slice());
+    data.extend_from_slice(name.clone().into_bytes().as_slice());
+    data.extend_from_slice(bytes.as_slice());
 }
 
 fn separate_classes(jar: File, class_vec: &mut Vec<String>, other_vec: &mut Vec<String>) {
