@@ -80,3 +80,6 @@ fabric.properties
 
 # targets
 dev.skidpacker.encrypt-rust/target
+dev.skidpacker.encryptjava/target
+dev.skidpacker.testjar/target
+dev.skidpacker.testjar/target
