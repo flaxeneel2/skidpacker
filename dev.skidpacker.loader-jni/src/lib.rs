@@ -33,7 +33,7 @@ pub extern "system" fn Java_dev_skidpacker_loader_jni_init(env: *mut u8, _class:
 ///
 fn decrypt_class_bytes(class_name: &str) -> Vec<u8> {
     let class_bytes = get_class_bytes(class_name);
-    /* Rest of decrypt process here */
+    let class_name = class_bytes.get(0).unwrap().to_string();
     Vec::new() //REPLACE LATER
 }
 
@@ -44,7 +44,7 @@ fn decrypt_class_bytes(class_name: &str) -> Vec<u8> {
 fn load_encrypted_class(class_name: &str) -> Result<bool, String> {
     let decrypted_class_bytes = decrypt_class_bytes(class_name);
     /* Rest of the load code here */
-    get_jni_env().define_unnamed_class(JObject::null(), &*decrypted_class_bytes).expect("TODO: panic message");
+    get_jni_env().define_class();
     Ok(true)
 }
 

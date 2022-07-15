@@ -4,7 +4,8 @@ use serde::{Serialize, Deserialize};
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
-    pub license: String
+    pub license: String,
+    pub input_jar: String
 }
 
 impl Config {
@@ -35,7 +36,8 @@ impl Default for Config {
     /// Used for the generation of the config file.
     fn default() -> Self {
         Config {
-            license: "PLEASE PUT YOUR LICENSE HERE".to_string()
+            license: "PLEASE PUT YOUR LICENSE HERE".to_string(),
+            input_jar: "PLEASE ENTER INPUT JAR NAME/PATH".to_string()
         }
     }
 }

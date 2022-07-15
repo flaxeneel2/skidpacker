@@ -6,15 +6,16 @@ import java.lang.reflect.Type
 
 class Settings {
 
-    val encryptionKey: String = ""
+    // The encryption key.
+    val encryptionKey: String = "1111111111111111" // Default key.
 
     companion object {
         private val gson = GsonBuilder()
-                .setLenient()
-                .setPrettyPrinting()
-                .registerTypeAdapter(Regex::class.java, RegexSerializer)
-                .registerTypeAdapter(Pair::class.java, PairSerializer)
-                .create()
+            .setLenient()
+            .setPrettyPrinting()
+            .registerTypeAdapter(Regex::class.java, RegexSerializer)
+            .registerTypeAdapter(Pair::class.java, PairSerializer)
+            .create()
 
         fun fromJson(json: String): Settings {
             return gson.fromJson(json, Settings::class.java)
@@ -25,6 +26,7 @@ class Settings {
         }
     }
 }
+
 
 object RegexSerializer : JsonSerializer<Regex>, JsonDeserializer<Regex> {
     override fun serialize(regex: Regex, ty: Type, ctx: JsonSerializationContext): JsonElement {
@@ -48,8 +50,8 @@ object PairSerializer : JsonSerializer<Pair<Any?, Any?>>, JsonDeserializer<Pair<
         val arr = json.asJsonArray
         val pty = ty as ParameterizedType
         return ctx.deserialize<Any?>(arr[0], pty.actualTypeArguments[0]) to ctx.deserialize<Any?>(
-                arr[1],
-                pty.actualTypeArguments[1]
+            arr[1],
+            pty.actualTypeArguments[1]
         )
     }
 }
