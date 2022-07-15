@@ -22,11 +22,14 @@ class Encryptor(
 
     fun run() {
         val key = settings.encryptionKey
-        val encryptedFile = File(outputJar.name + "encrypted")
-        val decryptedFile = File(outputJar.name + "decrypted")
+        val encryptedFile = File(outputJar.name + "-encrypted.jar")
+        val decryptedFile = File(outputJar.name + "-decrypted.jar")
         try {
             encrypt(key, inputJar, encryptedFile) // Encrypt the file.
+            Console.info("Successfully encrypted file!", Console.consoleNotificationType.INFO)
             decrypt(key, encryptedFile, decryptedFile) // Decrypt the file.
+            Console.info("Successfully decrypted file!", Console.consoleNotificationType.INFO)
+
         } catch (e: Exception) {
             Console.info(e.message, Console.consoleNotificationType.ERROR)
         }
