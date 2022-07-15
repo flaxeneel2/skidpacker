@@ -82,4 +82,5 @@ fabric.properties
 dev.skidpacker.encrypt-rust/target
 dev.skidpacker.encryptjava/target
 dev.skidpacker.testjar/target
-dev.skidpacker.testjar/target
+dev.skidpacker.loader-jni/target
+dev.skidpacker.loader/target
