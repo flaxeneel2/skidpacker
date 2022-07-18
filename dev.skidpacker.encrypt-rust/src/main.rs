@@ -38,7 +38,13 @@ struct Args {
     timings: bool,
     /// Number of threads to run the encryption on
     #[clap(short='T', long, default_value_t=4)]
-    threads: usize
+    threads: usize,
+    /// The key used to encrypt the classes
+    #[clap(short, long, default_value="11111111111111111111111111111111")]
+    key: String,
+    /// The Nonce used to encrypt the classes
+    #[clap(short, long, default_value="111111111111")]
+    nonce: String
 }
 
 static ARGS: OnceCell<Args> = OnceCell::new();
@@ -121,6 +127,31 @@ fn mass_encrypt_and_write_to_output_jar(i_classes: Vec<String>, i_other: Vec<Str
     let mut cs_hm: HashMap<String, Vec<u8>> = HashMap::new();
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
     let mut output_jar = ZipWriter::new(BufWriter::new(File::create(&args().output_jar).unwrap()));
+    let mut key = args().key.clone();
+    if key.len() != 32 {
+        warn!("Key needs to be 32 characters long! Only the first 32 characters will be used and any missing characters will be filled with 1s");
+        if key.len() > 32 {
+            warn!("Removing excess characters from the key...");
+            key = key[0..32].to_string();
+        } else {
+            warn!("Filling missing characters with 1s...");
+            key.push_str("1".repeat(32-key.len()).as_str());
+        }
+    }
+    log!("Key accepted!");
+    let mut nonce = args().nonce.clone();
+    if nonce.len() != 12 {
+        warn!("Nonce needs to be 12 characters long! Only the first 12 characters will be used and any missing characters will be filled with 1s");
+        if nonce.len() > 12 {
+            warn!("Removing excess characters from nonce...");
+            nonce = nonce[0..12].to_string();
+        } else {
+            warn!("Filling missing characters with 1s...");
+            nonce.push_str("1".repeat(12-nonce.len()).as_str());
+        }
+    }
+    log!("Nonce accepted!");
+    let enc_data = (key.clone(), nonce.clone());
     for x in classes {
         let mut cb: Vec<u8> = Vec::new();
         z_jar.by_name(x.as_str()).unwrap().read_to_end(&mut cb).unwrap();
@@ -128,7 +159,7 @@ fn mass_encrypt_and_write_to_output_jar(i_classes: Vec<String>, i_other: Vec<Str
     }
     cs_hm.into_par_iter().for_each_with(tx, |tx, a| {
         let mut b = a.1;
-        encrypt_class(&mut b, &a.0);
+        encrypt_class(&mut b, &a.0, enc_data.clone());
         tx.send((a.0, b)).expect("TODO: panic message");
     });
     for d in rx.iter() {
@@ -145,10 +176,10 @@ fn mass_encrypt_and_write_to_output_jar(i_classes: Vec<String>, i_other: Vec<Str
     }
 }
 
-fn encrypt_class(data: &mut Vec<u8>, name: &String) {
-    let key = Key::from_slice(b"11111111111111111111111111111111");
+fn encrypt_class(data: &mut Vec<u8>, name: &String, e: (String, String)) {
+    let key = Key::from_slice(e.0.as_bytes());
     let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice("111111111111".as_bytes());
+    let nonce = Nonce::from_slice(e.1.as_bytes());
     let mut bytes = data.clone();
     cipher.encrypt_in_place(nonce, b"", &mut bytes).expect("Failed to encrypt");
     data.clear();
