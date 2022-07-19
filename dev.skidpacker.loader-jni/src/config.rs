@@ -5,7 +5,8 @@ use serde::{Serialize, Deserialize};
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
     pub license: String,
-    pub input_jar: String
+    pub input_jar: String,
+    pub threads: usize
 }
 
 impl Config {
@@ -37,7 +38,8 @@ impl Default for Config {
     fn default() -> Self {
         Config {
             license: "PLEASE PUT YOUR LICENSE HERE".to_string(),
-            input_jar: "PLEASE ENTER INPUT JAR NAME/PATH".to_string()
+            input_jar: "PLEASE ENTER INPUT JAR NAME/PATH".to_string(),
+            threads: 4
         }
     }
 }

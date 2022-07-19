@@ -183,7 +183,7 @@ fn encrypt_class(data: &mut Vec<u8>, name: &String, e: (String, String)) {
     let mut bytes = data.clone();
     cipher.encrypt_in_place(nonce, b"", &mut bytes).expect("Failed to encrypt");
     data.clear();
-    data.extend_from_slice(name.len().to_be_bytes().as_slice());
+    data.push(name.clone().into_bytes().as_slice().len() as u8);
     data.extend_from_slice(name.clone().into_bytes().as_slice());
     data.extend_from_slice(bytes.as_slice());
 }
