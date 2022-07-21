@@ -43,6 +43,7 @@ pub extern "system" fn Java_dev_skidpacker_loader_jni_init(env: *mut u8, _class:
     ThreadPoolBuilder::new().num_threads(cfg.threads).build_global().unwrap();
     CONFIG.set(cfg).unwrap();
     let jar = get_jar();
+    test_jar(&jar);
     load_jar(jar);
 }
 
@@ -160,6 +161,32 @@ fn get_jar() -> File {
     jar.unwrap()
 }
 
+fn test_jar(jar: &File) {
+    let mut z_jar = ZipArchive::new(jar).unwrap();
+    let mut d = Vec::new();
+    let a = z_jar.by_name("skidpackertest");
+    if a.is_err() {
+        error!("The jar that you wanted to load doesn't seem to be a skidpacked jar!");
+        exit(1)
+    }
+    let mut a = a.unwrap();
+    let e = a.read_to_end(&mut d);
+    if e.is_err() {
+        error!("Failed to read test file! exiting...");
+        exit(1)
+    }
+    decrypt_class_bytes(&mut d);
+    let m = String::from_utf8(d);
+    if m.is_err() {
+        error!("Invalid key! Exiting...");
+        exit(1);
+    }
+    let ans = m.unwrap();
+    if ans != "Encryptionisprettygud" {
+        error!("Invalid key! Exiting...");
+        exit(1);
+    }
+}
 
 fn config() -> &'static Config {
     CONFIG.get().unwrap()
