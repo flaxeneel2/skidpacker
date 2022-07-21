@@ -84,7 +84,7 @@ macro_rules! log {
     };
 }
 
-
+/// The main run function. It handles the args parsing as well as setting the number of threads that the program will be allowed to use.
 fn main() {
     let loaded_args = Args::parse(); //parse the args
     ARGS.set(loaded_args).unwrap();
@@ -180,6 +180,11 @@ fn mass_encrypt_and_write_to_output_jar(i_classes: Vec<String>, i_other: Vec<Str
     }
 }
 
+/// Just a raw encrypt function that adds no additional data and encrypts.
+///
+/// # Arguments
+/// * `data` - The data to be encrypted
+/// * `e` - The set of key and nonce to be used to encrypt.
 fn raw_encrypt(data: &mut Vec<u8>, e: (String, String)) {
     let key = Key::from_slice(e.0.as_bytes());
     let cipher = Aes256Gcm::new(key);
@@ -187,6 +192,12 @@ fn raw_encrypt(data: &mut Vec<u8>, e: (String, String)) {
     cipher.encrypt_in_place(nonce, b"", data).expect("Failed to encrypt");
 }
 
+/// Encrypt a class, adding the extra data such as name and length of the name to the final data
+///
+/// # Arguments
+/// * `data` - The data to be encrypted
+/// * `name` - The name of the class
+/// * `e` - The set of key and nonce to be used to encrypt.
 fn encrypt_class(data: &mut Vec<u8>, name: &String, e: (String, String)) {
     let key = Key::from_slice(e.0.as_bytes());
     let cipher = Aes256Gcm::new(key);
@@ -199,6 +210,13 @@ fn encrypt_class(data: &mut Vec<u8>, name: &String, e: (String, String)) {
     data.extend_from_slice(bytes.as_slice());
 }
 
+/// This separates the contents of the jar file into classes and non-class files and places them into vectors that are passed by reference.
+/// If it fails to read the zip archive, it will error and exit with code 1.
+///
+/// # Arguments
+/// * `jar` - The jar whose contents need to be separated
+/// * `class_vec` - The classes vector passed by reference that will be populated by the class names.
+/// * `other_vec` - The non-class file vector passed by reference that will be populated with non-class files.
 fn separate_classes(jar: File, class_vec: &mut Vec<String>, other_vec: &mut Vec<String>) {
     let data = match ZipArchive::new(jar) {
         Ok(f) => f,
