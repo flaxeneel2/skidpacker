@@ -11,7 +11,7 @@ use std::sync::mpsc::{channel, Sender};
 use aes_gcm::{AeadInPlace, Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{NewAead};
 use jni::JNIEnv;
-use jni::objects::{JClass, JString};
+use jni::objects::{JClass, JObject, JString};
 use crate::config::Config;
 use once_cell::sync::OnceCell;
 #[allow(unused)]
@@ -70,9 +70,13 @@ fn separate_classes(classes: &mut Vec<String>, resources: &mut Vec<String>, jarf
     }
 }
 
-fn decrypt_and_load(class_names: &mut Vec<String>) {
+fn get_loader() -> JObject<'static> {
     let class_loader_class = get_jni_env().find_class("java/lang/ClassLoader").unwrap();
-    let loader = get_jni_env().call_static_method(class_loader_class, "getSystemClassLoader", "()Ljava/lang/ClassLoader;", &[]).unwrap().l().unwrap();
+    get_jni_env().call_static_method(class_loader_class, "getSystemClassLoader", "()Ljava/lang/ClassLoader;", &[]).unwrap().l().unwrap()
+}
+
+fn decrypt_and_load(class_names: &mut Vec<String>) {
+    let loader = get_loader();
 
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
     let cs_hm: HashMap<String, Vec<u8>> = HashMap::new();
@@ -102,8 +106,9 @@ fn load_resources(resources: &mut Vec<String>) {
         r_hm.insert(resource.clone(), res_bytes);
     }
     r_hm.par_iter().for_each(|a| {
+        let loader = get_loader();
         verbose!(format!("would have loaded class: {} with {} bytes", a.0, a.1.len()));
-        todo!("ACTUALLY LOAD THE CLASSES")
+        get_jni_env().call_method(loader, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", &[get_jni_env().new_string(a.0).unwrap().into(), get_jni_env().byte_array_from_slice(a.1).unwrap().into()]).unwrap();
     })
 }
 
