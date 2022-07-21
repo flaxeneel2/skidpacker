@@ -21,12 +21,9 @@ use rayon::ThreadPoolBuilder;
 
 use zip::ZipArchive;
 
-/*lazy_static! {
-    pub static ref JNI_PTR: Mutex<usize> = Mutex::new(0);
-    pub static ref CONFIG: Mutex<Config> = Mutex::new(Config::default());
-}*/
-
+/// The once cell for the JNI pointer
 static JNI_PTR: OnceCell<usize> = OnceCell::new();
+/// The once cell for the config.
 static CONFIG: OnceCell<Config> = OnceCell::new();
 
 /// The init function that has to be run to get the JNI pointer
@@ -47,6 +44,11 @@ pub extern "system" fn Java_dev_skidpacker_loader_jni_init(env: *mut u8, _class:
     load_jar(jar);
 }
 
+/// The main load function. This creates the classes and resources vectors to be passed by reference
+/// and splits into sub-functions that are then run.
+///
+/// # Arguments
+/// * `jar` - The jar to load
 fn load_jar(jar: File) {
     let mut classes: Vec<String> = Vec::new();
     let mut resources: Vec<String> = Vec::new();
@@ -55,6 +57,12 @@ fn load_jar(jar: File) {
     load_resources(&mut resources);
 }
 
+/// This function reads the jar to be loaded and separates its classes and resources into two separate vectors.
+///
+/// # Arguments
+/// * `classes` - The classes vector passed by reference. This is populated with the classnames.
+/// * `resources` - The resources vector passed by reference. This is populated with the names of the resources.
+/// * `jarfile` - The jar whose classes and resources need to be separated.
 fn separate_classes(classes: &mut Vec<String>, resources: &mut Vec<String>, jarfile: &File) {
     let data = match ZipArchive::new(jarfile) {
         Ok(f) => f,
@@ -70,11 +78,17 @@ fn separate_classes(classes: &mut Vec<String>, resources: &mut Vec<String>, jarf
     }
 }
 
+/// Get the loader object to load classes and resources.
 fn get_loader() -> JObject<'static> {
     let class_loader_class = get_jni_env().find_class("java/lang/ClassLoader").unwrap();
     get_jni_env().call_static_method(class_loader_class, "getSystemClassLoader", "()Ljava/lang/ClassLoader;", &[]).unwrap().l().unwrap()
 }
 
+/// The decrypt and load function. This function decrypts the classes using the number of threads specified in the config and loads them
+/// into the JVM.
+///
+/// # Arguments
+/// * `class_names` - Names of the classes to be loaded.
 fn decrypt_and_load(class_names: &mut Vec<String>) {
     let loader = get_loader();
 
@@ -96,7 +110,10 @@ fn decrypt_and_load(class_names: &mut Vec<String>) {
     }
 }
 
-
+/// This function loads the non-class files (resources) into the resource cache.
+///
+/// # Arguments
+/// * `resources` - The vector of non-class file names to be loaded.
 fn load_resources(resources: &mut Vec<String>) {
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
     let mut r_hm: HashMap<String, Vec<u8>> = HashMap::new();
@@ -107,7 +124,6 @@ fn load_resources(resources: &mut Vec<String>) {
     }
     r_hm.par_iter().for_each(|a| {
         let loader = get_loader();
-        verbose!(format!("would have loaded class: {} with {} bytes", a.0, a.1.len()));
         get_jni_env().call_method(loader, "put", "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;", &[get_jni_env().new_string(a.0).unwrap().into(), get_jni_env().byte_array_from_slice(a.1).unwrap().into()]).unwrap();
     })
 }
@@ -152,20 +168,26 @@ fn get_jni_env() -> JNIEnv<'static> {
     unsafe { JNIEnv::from_raw(ptr as *mut _).unwrap() }
 }
 
+/// Checks if the jar that has to be loaded exists and if so, returns it.
 fn get_jar() -> File {
     let name = config().input_jar.clone();
     if !Path::exists(Path::new(&name)) {
         error!("Input jar not found!");
-        exit(0);
+        exit(1);
     }
     let jar = File::open(name);
     if jar.is_err() {
         error!(format!("{}", jar.unwrap_err()));
-        exit(0);
+        exit(1);
     }
     jar.unwrap()
 }
 
+/// Tests if the key provided is valid by using a test file that would have been packed during the encryption process.
+/// If it is not, then this function will exit the program.
+///
+/// # Arguments
+/// * `jar` - The jar that needs to be tested.
 fn test_jar(jar: &File) {
     let mut z_jar = ZipArchive::new(jar).unwrap();
     let mut d = Vec::new();
@@ -193,6 +215,7 @@ fn test_jar(jar: &File) {
     }
 }
 
+/// Get the config
 fn config() -> &'static Config {
     CONFIG.get().unwrap()
 }
