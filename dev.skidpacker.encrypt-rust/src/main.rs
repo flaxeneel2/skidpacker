@@ -169,11 +169,22 @@ fn mass_encrypt_and_write_to_output_jar(i_classes: Vec<String>, i_other: Vec<Str
     i_other.iter().for_each(|a| {
         output_jar.raw_copy_file(z_jar.by_name(a.as_str()).unwrap()).unwrap();
     });
+    output_jar.start_file("skidpackertest", FileOptions::default()).expect("Failed to create the test file");
+    let mut test_data: Vec<u8> = b"Encryptionisprettygud".to_vec();
+    raw_encrypt(&mut test_data, enc_data);
+    output_jar.write_all(test_data.as_slice()).expect("failed to write test file data");
     if args().timings {
         log!(format!("Encryption done and encrypted jar generated! Time taken: {}ms", start.elapsed().unwrap().as_millis()))
     } else {
         log!("Encryption done and encrypted jar generated!")
     }
+}
+
+fn raw_encrypt(data: &mut Vec<u8>, e: (String, String)) {
+    let key = Key::from_slice(e.0.as_bytes());
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice(e.1.as_bytes());
+    cipher.encrypt_in_place(nonce, b"", data).expect("Failed to encrypt");
 }
 
 fn encrypt_class(data: &mut Vec<u8>, name: &String, e: (String, String)) {
