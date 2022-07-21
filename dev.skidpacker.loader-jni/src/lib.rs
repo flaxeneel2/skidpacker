@@ -14,6 +14,7 @@ use jni::JNIEnv;
 use jni::objects::{JClass, JString};
 use crate::config::Config;
 use once_cell::sync::OnceCell;
+#[allow(unused)]
 use colour::{blue_ln,white_ln,red_ln,yellow_ln};
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
@@ -69,9 +70,8 @@ fn separate_classes(classes: &mut Vec<String>, resources: &mut Vec<String>, jarf
 }
 
 fn decrypt_and_load(class_names: &mut Vec<String>) {
-    let loader = get_jni_env().get_static_field(
-        "net/minecraft/launchwrapper/Launch", "classLoader", "Lnet/minecraft/launchwrapper/LaunchClassLoader;",
-    ).unwrap().l().unwrap();
+    let class_loader_class = get_jni_env().find_class("java/lang/ClassLoader").unwrap();
+    let loader = get_jni_env().call_static_method(class_loader_class, "getSystemClassLoader", "()Ljava/lang/ClassLoader;", &[]).unwrap().l().unwrap();
 
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
     let cs_hm: HashMap<String, Vec<u8>> = HashMap::new();
@@ -101,7 +101,8 @@ fn load_resources(resources: &mut Vec<String>) {
         r_hm.insert(resource.clone(), res_bytes);
     }
     r_hm.par_iter().for_each(|a| {
-        /* Load here */
+        verbose!(format!("would have loaded class: {} with {} bytes", a.0, a.1.len()));
+        todo!("ACTUALLY LOAD THE CLASSES")
     })
 }
 
@@ -131,6 +132,7 @@ fn strip_name_data_from_class_bytes(class_bytes: &mut Vec<u8>) {
 ///
 /// # Arguments
 /// * `class_bytes` - The bytes of the class file
+#[allow(unused)]
 fn get_class_name(class_bytes: Vec<u8>) -> String {
     let length = *class_bytes.get(0).unwrap() as usize;
     let name_slice = String::from_utf8(class_bytes[1..length].to_vec()).unwrap();

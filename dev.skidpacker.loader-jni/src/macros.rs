@@ -4,7 +4,7 @@
 #[macro_export]
 macro_rules! verbose {
     ($msg: expr) => {
-        if args().verbose { white_ln!("DEBUG: {}", $msg) }
+        if config().verbose { white_ln!("DEBUG: {}", $msg) }
     };
 }
 
