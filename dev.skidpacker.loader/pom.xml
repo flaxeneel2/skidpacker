@@ -57,7 +57,6 @@
             <groupId>net.java.dev.jna</groupId>
             <artifactId>jna</artifactId>
             <version>5.11.0</version>
-            <scope>shade</scope>
         </dependency>
     </dependencies>
 

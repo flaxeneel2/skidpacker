@@ -33,15 +33,20 @@ static CONFIG: OnceCell<Config> = OnceCell::new();
 /// * `configPath` - Path to the config file to load
 #[no_mangle]
 #[allow(non_snake_case)]
-pub extern "system" fn Java_dev_skidpacker_loader_jni_init(env: *mut u8, _class: JClass, configPath: JString) {
+pub extern "system" fn Java_dev_skidpacker_loader_Jni_init(env: *mut u8, _class: JClass, configPath: JString) {
     JNI_PTR.set(env as usize).unwrap();
+    log!("1");
     let cfg_path: String = get_jni_env().get_string(configPath).unwrap().into();
     let cfg: Config = Config::load(cfg_path.as_str());
     ThreadPoolBuilder::new().num_threads(cfg.threads).build_global().unwrap();
     CONFIG.set(cfg).unwrap();
+    log!("2");
     let jar = get_jar();
+    log!("3");
     test_jar(&jar);
+    log!("4");
     load_jar(jar);
+    log!("5");
 }
 
 /// The main load function. This creates the classes and resources vectors to be passed by reference
