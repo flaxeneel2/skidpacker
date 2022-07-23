@@ -1,6 +1,9 @@
 use std::fs;
 use std::path::Path;
 use serde::{Serialize, Deserialize};
+#[allow(unused)]
+use colour::{blue_ln,white_ln,red_ln,yellow_ln};
+use crate::log;
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Config {
@@ -24,13 +27,12 @@ impl Config {
     /// * `cfg_path` - Path to load the config file from
     pub fn load(cfg_path: &str) -> Self {
         if !Path::new(cfg_path).exists() {
-            println!("Config file not found! Generating config file!");
+            log!("Config file not found! Generating config file!");
             Self::generate(cfg_path);
         }
         let cfg: Config = serde_yaml::from_str(fs::read_to_string(cfg_path).unwrap().as_str()).unwrap();
         cfg
     }
-
 }
 
 impl Default for Config {

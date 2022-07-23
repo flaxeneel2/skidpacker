@@ -7,6 +7,6 @@ module to work.
 public class Main {
 
     public static void main(String[] args) {
-        Jni.init();
+        Jni.init("skidpacker.yml");
     }
 }

@@ -35,18 +35,13 @@ static CONFIG: OnceCell<Config> = OnceCell::new();
 #[allow(non_snake_case)]
 pub extern "system" fn Java_dev_skidpacker_loader_Jni_init(env: *mut u8, _class: JClass, configPath: JString) {
     JNI_PTR.set(env as usize).unwrap();
-    log!("1");
     let cfg_path: String = get_jni_env().get_string(configPath).unwrap().into();
     let cfg: Config = Config::load(cfg_path.as_str());
     ThreadPoolBuilder::new().num_threads(cfg.threads).build_global().unwrap();
     CONFIG.set(cfg).unwrap();
-    log!("2");
     let jar = get_jar();
-    log!("3");
     test_jar(&jar);
-    log!("4");
     load_jar(jar);
-    log!("5");
 }
 
 /// The main load function. This creates the classes and resources vectors to be passed by reference
@@ -135,8 +130,7 @@ fn load_resources(resources: &mut Vec<String>) {
 
 /// Decrypts an encrypted class and returns byte vector
 /// # Arguments
-/// * `class_name` - Name of the class to be decrypted.
-///
+/// * `class_data` - Data of the class to be decrypted
 fn decrypt_class_bytes(class_data: &mut Vec<u8>) {
     let key = Key::from_slice(config().license.as_bytes());
     let cipher = Aes256Gcm::new(key);
