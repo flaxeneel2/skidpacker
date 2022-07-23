@@ -87,3 +87,8 @@ dev.skidpacker.loader/target
 
 # Maven generated files
 dev.skidpacker.loader/dependency-reduced-pom.xml
+dev.skidpacker.encryptjava/dependency-reduced-pom.xml
+dev.skidpacker.encrypt-rust/dependency-reduced-pom.xml
+dev.skidpacker.loader-jni/dependency-reduced-pom.xml
+dev.skidpacker.testjar/dependency-reduced-pom.xml
+
