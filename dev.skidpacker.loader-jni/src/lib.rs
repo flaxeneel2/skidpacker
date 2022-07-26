@@ -16,6 +16,8 @@ use crate::config::Config;
 use once_cell::sync::OnceCell;
 #[allow(unused)]
 use colour::{blue_ln,white_ln,red_ln,yellow_ln};
+
+
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 
@@ -33,15 +35,16 @@ static CONFIG: OnceCell<Config> = OnceCell::new();
 /// * `configPath` - Path to the config file to load
 #[no_mangle]
 #[allow(non_snake_case)]
-pub extern "system" fn Java_dev_skidpacker_loader_Jni_init(env: *mut u8, _class: JClass, configPath: JString) {
+pub extern "system" fn Java_dev_skidpacker_loader_Jni_init(env: *mut u8, _class: JClass, configPath: JString, j_args: JObject) {
     JNI_PTR.set(env as usize).unwrap();
+    log!("Loader dll loaded!");
     let cfg_path: String = get_jni_env().get_string(configPath).unwrap().into();
     let cfg: Config = Config::load(cfg_path.as_str());
     ThreadPoolBuilder::new().num_threads(cfg.threads).build_global().unwrap();
     CONFIG.set(cfg).unwrap();
     let jar = get_jar();
     test_jar(&jar);
-    load_jar(jar);
+    load_jar(jar, j_args);
 }
 
 /// The main load function. This creates the classes and resources vectors to be passed by reference
@@ -49,12 +52,12 @@ pub extern "system" fn Java_dev_skidpacker_loader_Jni_init(env: *mut u8, _class:
 ///
 /// # Arguments
 /// * `jar` - The jar to load
-fn load_jar(jar: File) {
+fn load_jar(jar: File, args: JObject) {
     let mut classes: Vec<String> = Vec::new();
     let mut resources: Vec<String> = Vec::new();
     separate_classes(&mut classes, &mut resources, &jar);
-    decrypt_and_load(&mut classes);
-    load_resources(&mut resources);
+    decrypt_and_load(&mut classes, args);
+    //load_resources(&mut resources);
 }
 
 /// This function reads the jar to be loaded and separates its classes and resources into two separate vectors.
@@ -89,25 +92,36 @@ fn get_loader() -> JObject<'static> {
 ///
 /// # Arguments
 /// * `class_names` - Names of the classes to be loaded.
-fn decrypt_and_load(class_names: &mut Vec<String>) {
+fn decrypt_and_load(class_names: &mut Vec<String>, args: JObject) {
     let loader = get_loader();
-
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
-    let cs_hm: HashMap<String, Vec<u8>> = HashMap::new();
+    let mut cs_hm: HashMap<String, Vec<u8>> = HashMap::new();
     for cn in class_names {
         let mut cb: Vec<u8> = Vec::new();
         z_jar.by_name(cn).unwrap().read_to_end(&mut cb).unwrap();
+        cs_hm.insert(cn.to_owned(), cb);
     }
     let (tx, rx): (Sender<(String, Vec<u8>)>, _) = channel();
     cs_hm.par_iter().for_each_with(tx, |tx, a| {
         let mut d = a.1.clone();
+        let mut n = a.0.clone();
+        n = n.replace(".class", "");
+        n = n.replace(".", "/");
         strip_name_data_from_class_bytes(&mut d);
         decrypt_class_bytes(&mut d);
-        tx.send((a.0.clone(), d)).unwrap();
+        tx.send((n, d)).unwrap();
     });
-    for d in rx.iter() {
-        get_jni_env().define_class(d.0, loader, d.1.as_slice()).unwrap();
+    for a in rx.iter() {
+        log!(format!("Loading {}!", a.0));
+        let ae = get_jni_env().define_class(a.0, loader, a.1.as_slice());
+        if ae.is_err() {
+            error!("Error defining class!");
+            error!(format!("{:?}", ae.unwrap_err()));
+            get_jni_env().exception_describe().unwrap();
+            exit(1);
+        }
     }
+    run_entrypoint_func(args);
 }
 
 /// This function loads the non-class files (resources) into the resource cache.
@@ -128,6 +142,54 @@ fn load_resources(resources: &mut Vec<String>) {
     })
 }
 
+fn run_entrypoint_func(args: JObject/*, class: JClass*/) {
+    let class_name = get_entrypoint_class().trim().to_string();
+    let class_name = class_name.replace(".class", "");
+    let class_name = class_name.replace(".", "/");
+    let class = match get_jni_env().find_class(class_name) {
+        Ok(v) => v,
+        Err(e) => {
+            error!("Unable to get main class via JNI!");
+            error!(format!("{:?}", e));
+            get_jni_env().exception_describe().unwrap();
+            exit(1);
+        }
+    };
+    let n = get_jni_env().call_static_method(class, "main", "([Ljava/lang/String;)V", &[args.into()]);
+    match n {
+        Ok(_) => { log!("Main method called!") },
+        Err(e) => {
+            error!(format!("{:?}", e));
+            error!(format!("{:?}", get_jni_env().exception_occurred().unwrap().into_inner()));
+        }
+    }
+}
+
+fn get_entrypoint_class() -> String {
+    let mut z_jar = ZipArchive::new(get_jar()).unwrap();
+    let mut filedata: Vec<u8> = Vec::new();
+    let f = z_jar.by_name("META-INF/MANIFEST.MF");
+    if f.is_err() {
+        error!(f.err().unwrap());
+        exit(1)
+    }
+    f.unwrap().read_to_end(&mut filedata).unwrap();
+    let data = String::from_utf8(filedata).unwrap();
+    let mut class: String = "".to_string();
+    for l in data.split("\n") {
+        if l.starts_with("Main-Class:") {
+            let l = l.replace("Main-Class: ", "");
+            log!(format!("Main class found! The class is {}", l));
+            class = l;
+        }
+    }
+    if class == "" {
+        error!("Did not find the main class entry in your manifest.mf! Exiting...");
+        exit(1);
+    }
+    class
+}
+
 /// Decrypts an encrypted class and returns byte vector
 /// # Arguments
 /// * `class_data` - Data of the class to be decrypted
@@ -135,7 +197,13 @@ fn decrypt_class_bytes(class_data: &mut Vec<u8>) {
     let key = Key::from_slice(config().license.as_bytes());
     let cipher = Aes256Gcm::new(key);
     let nonce = Nonce::from_slice(b"THISISANONCE");
-    cipher.decrypt_in_place(nonce, b"",class_data).unwrap();
+    let a = cipher.decrypt_in_place(nonce, b"",class_data);
+    if a.is_err() {
+        error!("Error encountered when decrypting a class!");
+        println!("{}", a.unwrap_err().to_string());
+        exit(1);
+    }
+    a.unwrap();
 }
 
 /// As the very long but descriptive name suggests, this function strips the name data from the stored class bytes.
@@ -144,7 +212,7 @@ fn decrypt_class_bytes(class_data: &mut Vec<u8>) {
 /// # Arguments
 /// * `class_bytes` - The class byte vector to strip the name data from
 fn strip_name_data_from_class_bytes(class_bytes: &mut Vec<u8>) {
-    let cuts = class_bytes.get(0).unwrap().clone() as usize;
+    let cuts = (class_bytes.get(0).unwrap().clone()+1) as usize;
     class_bytes.drain(0..cuts);
 }
 
@@ -208,6 +276,7 @@ fn test_jar(jar: &File) {
         exit(1);
     }
     let ans = m.unwrap();
+    log!(format!("De-enc result: {}", ans));
     if ans != "Encryptionisprettygud" {
         error!("Invalid key! Exiting...");
         exit(1);

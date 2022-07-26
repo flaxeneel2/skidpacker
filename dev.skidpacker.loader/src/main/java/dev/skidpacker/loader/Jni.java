@@ -15,5 +15,5 @@ public class Jni {
         }
     }
 
-    public native static void init(String configPath);
+    public native static void init(String configPath, String[] args);
 }
