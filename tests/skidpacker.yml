@@ -1,5 +1,0 @@
----
-license: 11111111111111111111111111111111
-input_jar: output.jar
-threads: 4
-verbose: false

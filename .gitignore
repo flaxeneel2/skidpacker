@@ -92,3 +92,4 @@ dev.skidpacker.encrypt-rust/dependency-reduced-pom.xml
 dev.skidpacker.loader-jni/dependency-reduced-pom.xml
 dev.skidpacker.testjar/dependency-reduced-pom.xml
 
+tests/
