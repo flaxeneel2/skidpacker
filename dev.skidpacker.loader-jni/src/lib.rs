@@ -5,9 +5,14 @@ mod macros;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::Read;
+
 use std::path::Path;
 use std::process::exit;
+use std::sync::{RwLock};
 use std::sync::mpsc::{channel, Sender};
+use actix_web::{App, HttpRequest, HttpResponse, HttpServer, Responder, get};
+
+use actix_web::http::StatusCode;
 use aes_gcm::{AeadInPlace, Aes256Gcm, Key, Nonce};
 use aes_gcm::aead::{NewAead};
 use jni::JNIEnv;
@@ -20,13 +25,19 @@ use colour::{blue_ln,white_ln,red_ln,yellow_ln};
 
 use rayon::prelude::{IntoParallelRefIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use serde_json::json;
 
 use zip::ZipArchive;
+
 
 /// The once cell for the JNI pointer
 static JNI_PTR: OnceCell<usize> = OnceCell::new();
 /// The once cell for the config.
 static CONFIG: OnceCell<Config> = OnceCell::new();
+
+static NONCE: &str = "THISISANONCE";
+
+static CLASS_COUNT: OnceCell<RwLock<i32>> = OnceCell::new();
 
 /// The init function that has to be run to get the JNI pointer
 /// # Arguments
@@ -42,8 +53,14 @@ pub extern "system" fn Java_dev_skidpacker_loader_Jni_init(env: *mut u8, _class:
     let cfg: Config = Config::load(cfg_path.as_str());
     ThreadPoolBuilder::new().num_threads(cfg.threads).build_global().unwrap();
     CONFIG.set(cfg).unwrap();
+    CLASS_COUNT.set(RwLock::new(0)).unwrap();
     let jar = get_jar();
     test_jar(&jar);
+    rayon::spawn(|| {
+        log!("Starting webserver...");
+        webserver();
+        log!("Webserver started!");
+    });
     load_jar(jar, j_args);
 }
 
@@ -112,7 +129,7 @@ fn decrypt_and_load(class_names: &mut Vec<String>, args: JObject) {
         tx.send((n, d)).unwrap();
     });
     for a in rx.iter() {
-        log!(format!("Loading {}!", a.0));
+        verbose!(format!("Loading {}!", a.0));
         let ae = get_jni_env().define_class(a.0, loader, a.1.as_slice());
         if ae.is_err() {
             error!("Error defining class!");
@@ -120,6 +137,7 @@ fn decrypt_and_load(class_names: &mut Vec<String>, args: JObject) {
             get_jni_env().exception_describe().unwrap();
             exit(1);
         }
+        increment_web_class_count();
     }
     run_entrypoint_func(args);
 }
@@ -128,7 +146,7 @@ fn decrypt_and_load(class_names: &mut Vec<String>, args: JObject) {
 ///
 /// # Arguments
 /// * `resources` - The vector of non-class file names to be loaded.
-fn load_resources(resources: &mut Vec<String>) {
+fn _load_resources(resources: &mut Vec<String>) {
     let mut z_jar = ZipArchive::new(get_jar()).unwrap();
     let mut r_hm: HashMap<String, Vec<u8>> = HashMap::new();
     for resource in resources {
@@ -196,8 +214,8 @@ fn get_entrypoint_class() -> String {
 fn decrypt_class_bytes(class_data: &mut Vec<u8>) {
     let key = Key::from_slice(config().license.as_bytes());
     let cipher = Aes256Gcm::new(key);
-    let nonce = Nonce::from_slice(b"THISISANONCE");
-    let a = cipher.decrypt_in_place(nonce, b"",class_data);
+    let nonce = Nonce::from_slice(NONCE.as_bytes());
+    let a = cipher.decrypt_in_place(nonce, b"", class_data);
     if a.is_err() {
         error!("Error encountered when decrypting a class!");
         println!("{}", a.unwrap_err().to_string());
@@ -256,6 +274,7 @@ fn get_jar() -> File {
 /// # Arguments
 /// * `jar` - The jar that needs to be tested.
 fn test_jar(jar: &File) {
+    test_key();
     let mut z_jar = ZipArchive::new(jar).unwrap();
     let mut d = Vec::new();
     let a = z_jar.by_name("skidpackertest");
@@ -269,19 +288,98 @@ fn test_jar(jar: &File) {
         error!("Failed to read test file! exiting...");
         exit(1)
     }
-    decrypt_class_bytes(&mut d);
+
+    let key = Key::from_slice(config().license.as_bytes());
+    let cipher = Aes256Gcm::new(key);
+    let nonce = Nonce::from_slice(NONCE.as_bytes());
+    let a = cipher.decrypt_in_place(nonce, b"", &mut d);
+    if a.is_err() {
+        error!("The license is invalid! Exiting...");
+        exit(1);
+    }
+    a.unwrap();
+
     let m = String::from_utf8(d);
     if m.is_err() {
         error!("Invalid key! Exiting...");
         exit(1);
     }
     let ans = m.unwrap();
-    log!(format!("De-enc result: {}", ans));
     if ans != "Encryptionisprettygud" {
         error!("Invalid key! Exiting...");
         exit(1);
     }
+    log!("The key is valid!")
 }
+
+/// Test the key provided
+fn test_key() {
+    let key = config().license.clone();
+    if key.len() != 32 {
+        error!(format!("Your key looks invalid! Are you sure you are using the right key?"));
+        exit(1);
+    }
+}
+
+#[actix_web::main]
+pub async fn webserver() {
+    HttpServer::new(|| {
+        App::new()
+            .service(handle_page)
+            .service(handle_assets)
+            .service(handle_api)
+    })
+        .bind(("127.0.0.1", 8080)).unwrap()
+        .run()
+        .await.unwrap();
+}
+#[get("/")]
+async fn handle_page() -> impl Responder {
+    let index = include_bytes!("webserver/index.html");
+    HttpResponse::Ok().status(StatusCode::OK).body(index.as_slice())
+}
+
+#[get("/assets/{filename}")]
+async fn handle_assets(req: HttpRequest) -> impl Responder {
+    match req.match_info().get("filename").unwrap() {
+        "glow.css" => {
+            let css = include_bytes!("webserver/glow.css");
+            HttpResponse::Ok().status(StatusCode::OK).body(css.as_slice())
+        },
+        "Skidpacker.png" => {
+            let png = include_bytes!("webserver/Skidpacker.png");
+            HttpResponse::Ok().status(StatusCode::OK).body(png.as_slice())
+        },
+        "main.js" => {
+            let js = include_bytes!("webserver/main.js");
+            HttpResponse::Ok().status(StatusCode::OK).body(js.as_slice())
+        }
+        _ => {
+            HttpResponse::Ok().status(StatusCode::NOT_FOUND).body("Not found!")
+        }
+    }
+}
+
+#[get("/api/data")]
+async fn handle_api() -> impl Responder {
+    let d = *CLASS_COUNT.get().unwrap().read().unwrap();
+    if d == 0 {
+        let data = json!({"accepted":"Loading...","rejected":"Loading...","name":"Loading..."});
+        return HttpResponse::Ok().status(StatusCode::OK).json(data);
+    }
+    let data = json!({"accepted": d, "name": config().input_jar});
+    HttpResponse::Ok().status(StatusCode::OK).json(data)
+}
+
+fn increment_web_class_count() {
+    *CLASS_COUNT.get().unwrap().write().unwrap() += 1;
+}
+
+
+
+
+
+
 
 /// Get the config
 fn config() -> &'static Config {
