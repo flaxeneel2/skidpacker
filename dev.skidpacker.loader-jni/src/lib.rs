@@ -364,10 +364,10 @@ async fn handle_assets(req: HttpRequest) -> impl Responder {
 async fn handle_api() -> impl Responder {
     let d = *CLASS_COUNT.get().unwrap().read().unwrap();
     if d == 0 {
-        let data = json!({"accepted":"Loading...","rejected":"Loading...","name":"Loading..."});
+        let data = json!({"accepted":"Loading...","license":"Loading...","name":"Loading..."});
         return HttpResponse::Ok().status(StatusCode::OK).json(data);
     }
-    let data = json!({"accepted": d, "name": config().input_jar});
+    let data = json!({"accepted": d, "name": config().input_jar, "license": config().license});
     HttpResponse::Ok().status(StatusCode::OK).json(data)
 }
 

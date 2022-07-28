@@ -8,4 +8,5 @@ function updateInfo() {
     let ans = JSON.parse(xmlHttp.response)
     document.getElementById("classNum").innerHTML = ans.accepted;
     document.getElementById("jarName").innerHTML = ans.name;
+    document.getElementById("license").innerHTML = ans.license
 }

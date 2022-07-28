@@ -1,6 +1,6 @@
 [package]
 name = "skidencrypt"
-version = "0.0.2"
+version = "0.0.3"
 edition = "2021"
 description = "A skidpacker encrypt program made to encrypt jarfiles to allow the skidpacker loader to load them."
 authors = ["flaxeneel2","slowrecall"]
